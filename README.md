@@ -99,7 +99,7 @@ graph TD
 ### ⚡ 2. 一键拉取与运行
 ```bash
 # 克隆仓库
-git clone [https://github.com/kzhx666/exam-system-pro.git](https://github.com/kzhx666/exam-system-pro.git)
+git clone https://github.com/kzhx666/exam-system-pro.git
 cd exam-system-pro
 
 # 一键构建并后台启动

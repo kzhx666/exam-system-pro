@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>在线测试</title>
+    <style>
+        body { font-family: sans-serif; background: #f5f5f5; padding: 15px; }
+        .container { max-width: 700px; margin: auto; background: #fff; padding: 15px; border-radius: 8px; }
+        /* 1. 题目紧凑排列 */
+        .q-item { border-bottom: 1px solid #eee; padding: 5px 0; margin-bottom: 5px; }
+        .q-title { font-size: 15px; font-weight: bold; margin-bottom: 3px; }
+        .q-opts { display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px; }
+        .q-opts label { cursor: pointer; border: 1px solid #ddd; padding: 2px 8px; border-radius: 4px; }
+        .hidden { display: none; }
+        #score-board { text-align: center; padding: 40px; }
+    </style>
+</head>
+<body>
+    <div class="container" id="main-app">
+        <h2 id="title">请等待老师发布题目...</h2>
+        <div id="exam-box"></div>
+        <button id="submit-btn" onclick="submit()" style="width:100%; margin-top:15px; padding:10px; background:#007bff; color:#fff; border:none; border-radius:4px; display:none;">提交试卷</button>
+    </div>
+
+    <div id="score-board" class="container hidden">
+        <h1 style="color: #28a745;">交卷成功</h1>
+        <div style="font-size: 48px; margin: 20px 0;"><span id="my-score">0</span>分</div>
+        <p>您的当前排名：第 <strong id="my-rank">1</strong> 名</p>
+        <button onclick="location.reload()" style="padding:8px 20px;">返回</button>
+    </div>
+
+    <script>
+        async function checkExam() {
+            const res = await fetch('/api/history');
+            const history = await res.json();
+            if(history.length > 0) {
+                const examRes = await fetch(`/api/exam/${history[0].id}?is_admin=false`);
+                const data = await examRes.json();
+                render(data);
+            }
+        }
+
+        function render(data) {
+            document.getElementById('title').innerText = data.title;
+            const box = document.getElementById('exam-box');
+            box.innerHTML = data.questions.map((q, i) => `
+                <div class="q-item">
+                    <div class="q-title">${i+1}. ${q.title}</div>
+                    <div class="q-opts">
+                        ${q.options.map(opt => `<label><input type="radio" name="q${i}">${opt}</label>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('submit-btn').style.display = 'block';
+        }
+
+        function submit() {
+            // 2. 交卷后只看分数排名，逻辑上直接隐藏考试区
+            document.getElementById('main-app').classList.add('hidden');
+            document.getElementById('score-board').classList.remove('hidden');
+            document.getElementById('my-score').innerText = Math.floor(Math.random() * 40) + 60; // 模拟
+            document.getElementById('my-rank').innerText = Math.floor(Math.random() * 5) + 1;
+        }
+
+        setInterval(checkExam, 5000); // 每5秒轮询是否有新发布的题
+    </script>
+</body>
+</html>

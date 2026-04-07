@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>答案解析详情</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f7f9; padding: 25px; line-height: 1.8; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .ana-card { border-bottom: 2px solid #eee; padding: 20px 0; margin-bottom: 10px; }
+        
+        /* 1. 题目字体颜色加深为纯黑 */
+        .q-title { font-size: 19px; font-weight: bold; color: #000; margin-bottom: 12px; }
+        /* 2. 选项字体颜色加深为深灰 */
+        .opt-item { font-size: 17px; color: #1a1a1a; margin-left: 20px; }
+        
+        .ans-row { color: #52c41a; font-weight: bold; font-size: 18px; margin: 15px 0 10px 0; }
+        .ana-box { background: #fafafa; padding: 15px; border-radius: 6px; border-left: 5px solid #ddd; color: #333; font-size: 17px; font-weight: bold; margin-top: 10px; }
+        h1 { text-align: center; color: #1a1a1a; border-bottom: 3px solid #eee; padding-bottom: 15px; margin-bottom: 25px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="title">试卷解析详情</h1>
+        <div id="content"></div>
+    </div>
+    <script>
+        const eid = window.location.pathname.split('/').pop();
+        async function load() {
+            try {
+                const res = await fetch('/api/analysis/' + eid);
+                const data = await res.json();
+                
+                document.getElementById('title').innerText = data.title + " (完整解析)";
+                
+                document.getElementById('content').innerHTML = data.questions.map((q, i) => `
+                    <div class="ana-card">
+                        <div class="q-title">${q.raw_num} ${q.content}</div>
+                        <div class="options">
+                            ${Object.entries(q.config.options || {}).map(([k,v]) => `
+                                <div class="opt-item">${q.type==='judge'?v:k+'. '+v}</div>
+                            `).join('')}
+                        </div>
+                        <div class="ans-row">正确答案：${q.config.answer}</div>
+                        <div class="ana-box"><b>解析：</b>${q.config.analysis || "无"}</div>
+                    </div>`).join('');
+            } catch(e) {
+                document.getElementById('title').innerText = "加载失败，请联系管理员";
+            }
+        }
+        load();
+    </script>
+</body>
+</html>

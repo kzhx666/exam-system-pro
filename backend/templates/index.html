@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"><title>智考 Pro - 考试终端</title>
+    <style>
+        :root { --primary: #4361ee; --success: #10b981; --text-soft: #1e293b; }
+        body { background: #f1f5f9; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        .app-top-nav { height: 38px; background: #1e293b; color: white; display: flex; align-items: center; padding: 0 20px; font-size: 14px; font-weight: 700; justify-content: space-between; }
+        .workspace { display: flex; flex-1; overflow: hidden; }
+        #questions-container { flex: 1; overflow-y: auto; padding: 10px 20px 80px 20px; }
+        .q-card { background: #fff; border-radius: 8px; padding: 12px 18px; margin-bottom: 8px; border: 1px solid #e2e8f0; }
+        .q-header { display: flex; gap: 10px; margin-bottom: 6px; }
+        .q-num-badge { background: var(--primary); color: #fff; font-weight: 700; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+        /* 题目：降低字重，软化颜色 */
+        .q-content { font-size: 16px; font-weight: 600; color: var(--text-soft); line-height: 1.4; }
+        .options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px; padding-left: 32px; }
+        /* 选项：降低字重，软化颜色 */
+        .opt-btn { cursor: pointer; padding: 6px 12px; border: 1.5px solid #f1f5f9; border-radius: 6px; background: #f8fafc; display: flex; align-items: center; font-size: 15px; font-weight: 600; color: var(--text-soft); transition: 0.1s; }
+        .opt-btn.active { background: var(--primary); color: #fff !important; }
+        input[type="radio"], input[type="checkbox"] { display: none; }
+        .control-tower { width: 260px; background: #fff; border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 18px; }
+        .tower-label { font-size: 12px; color: #64748b; font-weight: 800; margin-bottom: 6px; display: block; }
+        .stu-name-input { width: 100%; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 15px; font-weight: 700; background: #f8fafc; outline: none; }
+        .sheet-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+        .sheet-dot { aspect-ratio: 1; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; cursor: pointer; }
+        .sheet-dot.done { background: var(--success); color: #fff; }
+        .btn-submit-pro { background: var(--success); color: #fff; border: none; width: 100%; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: 900; cursor: pointer; margin-top: 10px; }
+        #result-overlay { position: fixed; inset: 0; background: #0f172a; display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 2000; color: #fff; }
+    </style>
+</head>
+<body>
+    <nav class="app-top-nav"><span id="title-text">LOADING...</span><span>TERMINAL V3.1</span></nav>
+    <div class="workspace">
+        <main id="questions-container"><div id="questions-list"></div></main>
+        <aside class="control-tower">
+            <div style="margin-bottom: 15px;">
+                <label class="tower-label">IDENTITY / 考生姓名</label>
+                <input type="text" id="stu-name" class="stu-name-input" placeholder="请选择或输入" list="roster-list" autocomplete="off">
+                <datalist id="roster-list"></datalist>
+            </div>
+            <div style="flex: 1; overflow-y: auto;">
+                <label class="tower-label">PROGRESS / 进度</label>
+                <div class="sheet-grid" id="answer-sheet"></div>
+            </div>
+            <button class="btn-submit-pro" onclick="submitExam()">完成交卷</button>
+        </aside>
+    </div>
+    <div id="result-overlay"><div id="final-score" style="font-size:100px;">0</div><button onclick="location.reload()">返回</button></div>
+    <script>
+        const eid = window.location.pathname.split('/').pop();
+        let questions = []; let answers = {};
+        async function init() {
+            const res = await fetch('/api/exams/' + eid); const data = await res.json();
+            questions = data.questions; document.getElementById('title-text').innerText = data.title;
+            const dl = document.getElementById('roster-list');
+            dl.innerHTML = (data.roster || []).map(name => `<option value="${name}">`).join('');
+            document.getElementById('questions-list').innerHTML = questions.map((q, i) => `
+                <div class="q-card" id="target-${q.id}"><div class="q-header"><div class="q-num-badge">${q.raw_num}</div><div class="q-content">${q.content}</div></div>
+                <div class="options-grid">${Object.entries(q.config.options).map(([k, v]) => `
+                    <label class="opt-btn" id="label-${q.id}-${k}">
+                    <input type="${q.type=='multiple'?'checkbox':'radio'}" name="${q.id}" value="${k}" onchange="updateAns('${q.id}','${k}','${q.type}')">
+                    <span style="color:var(--primary);margin-right:8px;">${k}.</span>${v}</label>`).join('')}</div></div>`).join('');
+            document.getElementById('answer-sheet').innerHTML = questions.map((q, i) => `<div class="sheet-dot" id="sheet-${q.id}" onclick="document.getElementById('target-${q.id}').scrollIntoView({behavior:'smooth',block:'center'})">${i+1}</div>`).join('');
+        }
+        function updateAns(qid, key, type) {
+            if (type === 'multiple') {
+                const vals = Array.from(document.querySelectorAll(`input[name="${qid}"]:checked`)).map(i => i.value);
+                answers[qid] = vals;
+                document.querySelectorAll(`[id^="label-${qid}-"]`).forEach(l => l.classList.remove('active'));
+                vals.forEach(v => document.getElementById(`label-${qid}-${v}`).classList.add('active'));
+                document.getElementById('sheet-'+qid).classList.toggle('done', vals.length > 0);
+            } else {
+                answers[qid] = key;
+                document.querySelectorAll(`[id^="label-${qid}-"]`).forEach(l => l.classList.remove('active'));
+                document.getElementById(`label-${qid}-${key}`).classList.add('active');
+                document.getElementById('sheet-'+qid).classList.add('done');
+            }
+        }
+        async function submitExam() {
+            const name = document.getElementById('stu-name').value.trim();
+            if(!name) return alert("请先填写姓名！");
+            const res = await fetch('/api/submit', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({exam_id:eid, name:name, answers:answers})});
+            const r = await res.json(); document.getElementById('result-overlay').style.display='flex'; document.getElementById('final-score').innerText = r.score;
+        }
+        init();
+    </script>
+</body>
+</html>

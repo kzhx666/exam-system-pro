@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>教师后台</title>
+<style>
+    body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }
+    .card { background: white; padding: 20px; border-radius: 8px; max-width: 1200px; margin: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+    th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
+    th { background: #fafafa; }
+    .status-ok { color: #52c41a; font-weight: bold; margin-right: 5px; }
+    .status-err { color: #f5222d; margin-right: 5px; }
+    .btn-del { padding: 5px 10px; background: #ff4d4f; color: white; border: none; border-radius: 4px; cursor: pointer; }
+</style>
+</head>
+<body>
+    <div class="card">
+        <h2>📊 考试成绩汇总</h2>
+        <table>
+            <thead><tr><th width="50">排名</th><th width="100">学生姓名</th><th width="70">总分</th><th>答题详情</th><th width="80">操作</th></tr></thead>
+            <tbody id="stat-body"></tbody>
+        </table>
+    </div>
+    <script>
+        const eid = window.location.pathname.split('/').pop();
+        async function load() {
+            const res = await fetch('/api/submissions/' + eid); const data = await res.json();
+            data.sort((a,b) => b.score - a.score);
+            document.getElementById('stat-body').innerHTML = data.map((s, i) => {
+                let detail = Object.entries(s.details).map(([qid, status]) => {
+                    const isOk = status === "对";
+                    return `<span class="${isOk?'status-ok':'status-err'}">${qid.replace('q_','')}:${status}</span>`;
+                }).join(' ');
+                return `<tr><td>${i+1}</td><td><b>${s.name}</b></td><td style="color:red; font-weight:bold;">${s.score}</td><td style="text-align:left;">${detail}</td>
+                        <td><button class="btn-del" onclick="delSub(${s.id})">删除</button></td></tr>`;
+            }).join('');
+        }
+        async function delSub(sid) {
+            if(!confirm("确定删除该学生的答题记录吗？")) return;
+            await fetch('/api/submissions/' + sid, { method: 'DELETE' });
+            load();
+        }
+        load();
+    </script>
+</body>
+</html>

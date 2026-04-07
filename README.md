@@ -5,6 +5,7 @@
 ![系统状态](https://img.shields.io/badge/Status-Active-success)
 ![部署方式](https://img.shields.io/badge/Deploy-Docker-blue)
 ![后端技术](https://img.shields.io/badge/Backend-FastAPI-009688)
+![开源协议](https://img.shields.io/badge/License-MIT-green)
 
 ## ✨ 核心特性 (Features)
 
@@ -36,7 +37,8 @@ docker-compose up -d --build
 ```
 
 系统默认运行在 `8000` 端口。访问以下链接即可使用：
-* **教师管理后台**：`http://你的服务器IP:8000/admin` (默认安全密码: `123456`，可在 `index.html` 中修改)
+* **教师管理后台**：`http://你的服务器IP:8000/admin` 
+*(⚠️ 默认安全密码为 `123456`，强烈建议在实际投入生产环境前，修改 `backend/templates/admin.html` 中的密码验证逻辑！)*
 
 ## ✍️ 出题语法规范 (Markdown Syntax)
 
@@ -81,4 +83,7 @@ exam-system-pro/
 ```
 
 ## 🔒 数据安全提示
-本仓库已配置 `.gitignore`，默认忽略 `data/` 目录下的所有 `.db` 数据库文件。在执行 `git push` 时，您的真实学生数据和考试记录绝对不会被公开上传至云端，请放心使用。
+本仓库已配置 `.gitignore`，默认忽略 `data/` 目录下的所有 `.db` 数据库文件。当您执行 `git push` 备份自己修改的代码时，真实的考试数据绝对不会被公开上传至云端。
+
+## 📄 协议 (License)
+本项目采用 [MIT License](https://opensource.org/licenses/MIT) 开源协议。欢迎广大教师与开发者 Fork 学习、修改或将其用于自己的教学实践中。

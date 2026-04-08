@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, String, Integer, Text, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
 import uuid, re, json, os, datetime
+import os, tarfile, base64, urllib.request, urllib.parse, datetime
 
 DB_DIR = "/app/data"
 os.makedirs(DB_DIR, exist_ok=True)
@@ -181,3 +182,38 @@ def s_ana(eid: str): return FileResponse("/app/templates/analysis.html")
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.post("/api/backup")
+async def backup():
+    # 1. 获取 docker-compose 中配置的环境变量
+    user = os.environ.get("NUTSTORE_USER")
+    pw = os.environ.get("NUTSTORE_PASS")
+    url = os.environ.get("WEBDAV_URL")
+    db_path = "/app/data/exam.db"
+
+    if not all([user, pw, url]):
+        raise HTTPException(status_code=500, detail="未配置坚果云环境变量")
+
+    try:
+        # 2. 将 SQLite 数据库打包压缩为 tar.gz
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        name = f"exam_backup_{ts}.tar.gz"
+        path = f"/tmp/{name}"
+        with tarfile.open(path, "w:gz") as tar:
+            tar.add(db_path, arcname="exam.db")
+        
+        # 3. 读取压缩包
+        with open(path, "rb") as f:
+            content = f.read()
+        
+        # 4. 通过 WebDAV 协议 (PUT 请求) 上传至坚果云
+        target = f"{url.rstrip('/')}/{name}"
+        req = urllib.request.Request(urllib.parse.quote(target, safe=':/'), data=content, method="PUT")
+        auth = base64.b64encode(f'{user}:{pw}'.encode()).decode()
+        req.add_header("Authorization", f"Basic {auth}")
+        urllib.request.urlopen(req)
+        
+        # 5. 上传成功后清理临时文件
+        os.remove(path)
+        return {"message": "已成功备份至坚果云！"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

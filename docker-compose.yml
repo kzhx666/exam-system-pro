@@ -8,4 +8,11 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
+      # 映射前端模板，修改 admin.html 刷新网页即生效
+      - ./backend/templates:/app/templates
+    environment:
+      # 坚果云备份配置
+      - NUTSTORE_USER=坚果云邮箱
+      - NUTSTORE_PASS=坚果云密码
+      - WEBDAV_URL=https://dav.jianguoyun.com/dav/智考Pro备份
     restart: always

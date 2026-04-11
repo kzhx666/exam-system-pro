@@ -135,11 +135,12 @@
                 <div class="history-item">
                     <span><strong>${item.title}</strong></span>
                     <div>
-                        <a href="/exam/${item.id}" target="_blank" class="btn" style="background:#52c41a">答题</a>
-                        <button onclick="editExam('${item.id}')" class="btn" style="background:#1890ff">修改</button>
-                        <a href="/dashboard/${item.id}" target="_blank" class="btn" style="background:#722ed1">后台</a>
-                        <a href="/analysis/${item.id}" target="_blank" class="btn" style="background:#fa8c16">解析</a>
-                        <button onclick="del('${item.id}')" class="btn" style="background:#dc3545">删除</button>
+						<a href="/exam/${item.id}" target="_blank" class="btn" style="background:#52c41a">答题</a>
+						<button onclick="editExam('${item.id}')" class="btn" style="background:#1890ff">修改</button>
+						<a href="/dashboard/${item.id}" target="_blank" class="btn" style="background:#722ed1">后台</a>
+						<a href="/analysis/${item.id}" target="_blank" class="btn" style="background:#fa8c16">解析</a>
+						<a href="/report/${item.id}" target="_blank" class="btn" style="background:#0ea5e9">学情</a> 
+						<button onclick="del('${item.id}')" class="btn" style="background:#dc3545">删除</button>
                     </div>
                 </div>`).join('');
         }

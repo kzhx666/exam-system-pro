@@ -178,6 +178,8 @@ def s_exam(eid: str): return FileResponse("/app/templates/index.html")
 def s_dash(eid: str): return FileResponse("/app/templates/dashboard.html")
 @app.get("/analysis/{eid}")
 def s_ana(eid: str): return FileResponse("/app/templates/analysis.html")
+@app.get("/report/{eid}")
+def s_report(eid: str): return FileResponse("/app/templates/report.html")
 
 if __name__ == "__main__":
     import uvicorn

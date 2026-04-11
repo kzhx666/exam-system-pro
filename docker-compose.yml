@@ -12,7 +12,7 @@ services:
       - ./backend/templates:/app/templates
     environment:
       # 坚果云备份配置
-      - NUTSTORE_USER=坚果云邮箱
-      - NUTSTORE_PASS=坚果云密码
+      - NUTSTORE_USER=965680859@qq.com
+      - NUTSTORE_PASS=ai2svw3zt3pqrsns
       - WEBDAV_URL=https://dav.jianguoyun.com/dav/智考Pro备份
     restart: always

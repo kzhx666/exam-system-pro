@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>智能学情诊断报告</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #f8fafc; color: #334155; padding: 30px; margin: 0; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; }
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .left-column { display: flex; flex-direction: column; gap: 30px; } 
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .card h2 { margin-top: 0; font-size: 18px; border-left: 4px solid #3b82f6; padding-left: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .point-list-container { max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
+        .point-list { list-style: none; padding: 0; margin: 0; }
+        .point-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; margin-bottom: 8px; background: #f1f5f9; border-radius: 6px; border-left: 4px solid #ef4444; }
+        .point-left { display: flex; align-items: center; gap: 10px; }
+        .point-name { font-weight: bold; font-size: 15px; cursor: pointer; }
+        .btn-magic { background: #8b5cf6; color: white; border: none; padding: 12px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; font-size: 15px; margin-bottom: 20px;}
+        .btn-magic:hover { background: #7c3aed; }
+        .btn-view { background: #e2e8f0; color: #334155; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;}
+        .btn-view:hover { background: #cbd5e1; }
+        #ai-prompt-box { width: 100%; height: 180px; padding: 15px; border: 2px solid #cbd5e1; border-radius: 8px; font-family: monospace; font-size: 14px; background: #f8fafc; resize: vertical; box-sizing: border-box; line-height: 1.5; }
+        #modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; }
+        #modal-box { background: white; width: 80%; max-width: 800px; max-height: 80vh; overflow-y: auto; border-radius: 12px; padding: 30px; position: relative; line-height: 1.6; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);}
+        #close-modal { position: absolute; top: 15px; right: 20px; font-size: 28px; cursor: pointer; font-weight: bold; color: #94a3b8; line-height: 1;}
+        #close-modal:hover { color: #ef4444; }
+        #modal-content details { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 15px;}
+        #modal-content summary { font-weight: bold; color: #3b82f6; cursor: pointer; margin-bottom: 10px; }
+        #modal-content blockquote { margin: 0; border-left: 4px solid #cbd5e1; padding-left: 15px; color: #475569; }
+        .top-student-list { list-style: none; padding: 0; margin: 0; max-height: 600px; overflow-y: auto; padding-right: 5px;}
+        
+        /* 优等生列表样式优化 - 加入折叠特效 */
+        .top-student-item { background: #fffbeb; border: 1px solid #fde68a; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #f59e0b; }
+        .ts-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: background 0.2s; border-radius: 4px; }
+        .ts-header:hover { opacity: 0.8; }
+        .toggle-icon { display: inline-block; margin-right: 8px; color: #d97706; font-size: 14px; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .ts-name { font-weight: bold; color: #92400e; font-size: 16px; }
+        .ts-score { font-size: 14px; color: #b45309; background: #fef3c7; padding: 3px 10px; border-radius: 12px; font-weight: bold; }
+        
+        /* 收起时的状态 */
+        .collapsed .toggle-icon { transform: rotate(-90deg); }
+        .collapsed .ts-details { display: none; }
+        
+        .ts-details { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #fcd34d; }
+        
+        .mistake-item { background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;}
+        .mistake-point { font-size: 14px; color: #1e293b; margin-bottom: 8px; font-weight: bold; display:flex; justify-content: space-between;}
+        .mistake-q { font-size: 14px; color: #334155; background: #f8fafc; padding: 10px; border-radius: 6px; margin-bottom: 8px; line-height: 1.5; }
+        .mistake-q p { margin: 0 0 5px 0; }
+        .ts-reason { font-size: 13px; color: #047857; background: #ecfdf5; padding: 10px; border-radius: 6px; border-left: 3px solid #10b981; line-height: 1.5;}
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 智能学情诊断报告 
+            <span style="font-size:13px; background:#dcfce7; color:#166534; padding:4px 10px; border-radius:12px; margin-left:15px; display:inline-flex; align-items:center; gap:6px; font-weight:normal;">
+                <span style="width:8px; height:8px; background:#22c55e; border-radius:50%; animation: pulse 2s infinite;"></span>
+                实时监控中 (已交卷: <span id="live-count" style="font-weight:bold;">0</span> 人)
+            </span>
+        </h1>
+        <span style="color:#64748b; font-weight:bold;">试卷 ID: <span id="e-id"></span></span>
+    </div>
+
+    <div class="grid-container">
+        <div class="left-column">
+            <div class="card">
+                <h2>班级核心薄弱点雷达图 (Top 8)</h2>
+                <div id="radar-chart" style="width: 100%; height: 350px;"></div>
+            </div>
+
+            <div class="card">
+                <h2 style="border-left-color: #f59e0b;">🏆 优等生错题专属诊断 (27%高分段预警)</h2>
+                <p id="top-student-meta" style="font-size:12px; color:#64748b; margin-top:-10px; margin-bottom: 15px;">⏳ 正在等待学生交卷...</p>
+                <ul class="top-student-list" id="top-students-list">
+                    <li style="color:#94a3b8;">还没有学生交卷哦...</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>⚠️ 高频薄弱考点 <label style="font-size: 14px; font-weight: normal; cursor: pointer;"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"> 全选/取消</label></h2>
+            <div class="point-list-container">
+                <ul class="point-list" id="weak-points-list"><li style="color:#94a3b8;">还没有学生交卷哦...</li></ul>
+            </div>
+            <button class="btn-magic" onclick="generateBatchPrompt()">✨ 生成所选考点综合补偿题</button>
+
+            <h2 style="border-left-color:#8b5cf6; margin-top:20px;">🤖 AI 补偿练习一键生成器</h2>
+            <textarea id="ai-prompt-box" placeholder="勾选上方薄弱点，点击【生成综合补偿题】，系统将自动拼装复合咒语..."></textarea>
+            <button style="background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px;" onclick="copyPrompt()">📋 一键复制提示词</button>
+        </div>
+    </div>
+
+    <div id="modal-overlay">
+        <div id="modal-box">
+            <span id="close-modal" onclick="document.getElementById('modal-overlay').style.display='none'">&times;</span>
+            <h2 style="margin-top:0; border-bottom:2px solid #e2e8f0; padding-bottom:10px; color:#1e293b;">🎯 错因溯源与解析</h2>
+            <div id="modal-content"></div>
+        </div>
+    </div>
+
+    <script>
+        const examId = window.location.pathname.split('/').pop();
+        document.getElementById('e-id').innerText = examId;
+        window.rawMarkdown = ""; 
+        window.pointMap = {}; 
+        let lastSubmitCount = -1; 
+
+        const REAL_API_URL = '/api/submissions/' + examId; 
+
+        async function fetchRealData() {
+            try {
+                const res = await fetch(REAL_API_URL);
+                if (!res.ok) throw new Error("API 响应失败");
+                const rawData = await res.json();
+                
+                let students = rawData.data || rawData.submissions || rawData.list || rawData.records || rawData;
+                if (!Array.isArray(students) && typeof students === 'object') {
+                    students = Object.values(students);
+                }
+                return Array.isArray(students) ? students : [];
+            } catch (e) {
+                console.error("数据拉取失败：", e);
+                return []; 
+            }
+        }
+
+        async function initAnalysis() {
+            try {
+                const res = await fetch(`/api/exams/raw/${examId}`);
+                const data = await res.json();
+                window.rawMarkdown = data.md; 
+                
+                let blocks = window.rawMarkdown.split(/(?=\n\s*(?:\*\*)?\d+\.\s*\[)/);
+                let qIndex = 1;
+                blocks.forEach(block => {
+                    if (/\d+\.\s*\[/.test(block)) {
+                        let match = block.match(/data-point="([^"]+)"/);
+                        let pName = match ? match[1] : ("第 " + qIndex + " 题考点");
+                        window.pointMap['q_' + qIndex] = pName;
+                        window.pointMap[qIndex + ''] = pName; 
+                        qIndex++;
+                    }
+                });
+            } catch (e) {
+                console.error("未能读取到试卷 Markdown");
+            }
+
+            await updateDashboard();
+            setInterval(updateDashboard, 5000);
+        }
+
+        async function updateDashboard() {
+            let allStudents = await fetchRealData();
+            
+            if (allStudents.length === lastSubmitCount) return; 
+            lastSubmitCount = allStudents.length;
+
+            document.getElementById('live-count').innerText = allStudents.length;
+            if (allStudents.length === 0) return; 
+
+            allStudents.forEach(stu => {
+                let stuName = stu.name || stu.student_name || stu.studentName || stu.username || "佚名";
+                let stuScore = stu.score || stu.total_score || stu.totalScore || 0;
+                
+                let detailObj = {};
+                for (let k in stu) {
+                    let val = stu[k];
+                    if (typeof val === 'string' && val.includes('错(答')) {
+                        try { val = JSON.parse(val); } catch(e){}
+                    }
+                    if (typeof val === 'object' && val !== null) {
+                        if (val['q_1'] || val['1'] || Object.values(val).some(v => typeof v === 'string' && v.startsWith('错'))) {
+                            detailObj = val;
+                            break;
+                        }
+                    }
+                }
+
+                stu._cleanErrors = [];
+                stu._cleanName = stuName;
+                stu._cleanScore = stuScore;
+
+                for (let key in detailObj) {
+                    let val = detailObj[key];
+                    if (typeof val === 'string' && val.startsWith("错")) {
+                        let wrongMatch = val.match(/错\(答:(.+)\)/);
+                        let wrongAns = wrongMatch ? wrongMatch[1] : "未知";
+                        
+                        wrongAns = wrongAns.replace(/\[/g, '').replace(/\]/g, '').replace(/'/g, '').replace(/"/g, '');
+                        if(wrongAns === 'T') wrongAns = '正确';
+                        if(wrongAns === 'F') wrongAns = '错误';
+
+                        let cleanKey = key.startsWith('q_') ? key : 'q_' + key;
+                        let ptName = window.pointMap[cleanKey] || window.pointMap[key] || ("第 " + key.replace(/[^0-9]/ig,"") + " 题考点");
+                        stu._cleanErrors.push({ point: ptName, wrong: wrongAns });
+                    }
+                }
+            });
+
+            let classSize = allStudents.length;
+            let pointErrorCounts = {};
+            
+            allStudents.forEach(stu => {
+                stu._cleanErrors.forEach(err => {
+                    if(!pointErrorCounts[err.point]) {
+                        pointErrorCounts[err.point] = { count: 0, traps: {} };
+                    }
+                    pointErrorCounts[err.point].count++;
+                    let t = err.wrong;
+                    pointErrorCounts[err.point].traps[t] = (pointErrorCounts[err.point].traps[t] || 0) + 1;
+                });
+            });
+
+            let pointStats = [];
+            for (let pt in pointErrorCounts) {
+                let pData = pointErrorCounts[pt];
+                let mastery = classSize > 0 ? Math.round(100 - (pData.count / classSize * 100)) : 100;
+                
+                let topTrap = "无";
+                let maxTrapCount = 0;
+                for(let t in pData.traps) {
+                    if(pData.traps[t] > maxTrapCount) { maxTrapCount = pData.traps[t]; topTrap = t; }
+                }
+                let trapRate = pData.count > 0 ? Math.round((maxTrapCount / pData.count) * 100) : 0;
+
+                pointStats.push({ name: pt, score: mastery, trap: topTrap, trapRate: trapRate });
+            }
+            pointStats.sort((a,b) => a.score - b.score);
+            
+            renderRadar(pointStats);
+            renderWeakPoints(pointStats);
+
+            allStudents.sort((a,b) => b._cleanScore - a._cleanScore);
+            let top27Count = Math.max(1, Math.ceil(classSize * 0.27)); 
+            let topStudents = allStudents.slice(0, top27Count);
+            
+            renderTopStudentsAnalysis(topStudents, classSize); 
+        }
+
+        function renderRadar(pointStats) {
+            const chartDom = document.getElementById('radar-chart');
+            if (!chartDom) return;
+            const myChart = echarts.getInstanceByDom(chartDom) || echarts.init(chartDom);
+            if(pointStats.length === 0) {
+                myChart.clear();
+                return chartDom.innerHTML = "<div style='text-align:center; padding-top:100px; color:#10b981; font-weight:bold;'>🎉 太棒了，当前交卷学生全员满分！</div>";
+            }
+            const indicator = pointStats.slice(0, 8).map(p => ({ name: p.name.length > 10 ? p.name.substring(0, 9) + '...' : p.name, max: 100 }));
+            myChart.setOption({
+                tooltip: {}, radar: { indicator: indicator, radius: '55%', axisName: { color: '#334155' } },
+                series: [{ type: 'radar', data: [{ value: pointStats.slice(0, 8).map(p=>p.score), name: '班级掌握度', areaStyle: { color: 'rgba(59, 130, 246, 0.4)' }, itemStyle: { color: '#3b82f6' } }] }]
+            });
+        }
+
+        function renderWeakPoints(pointStats) {
+            if(pointStats.length === 0) return document.getElementById('weak-points-list').innerHTML = "<li style='padding:10px;color:#10b981;'>全班满分无弱点！</li>";
+            document.getElementById('weak-points-list').innerHTML = pointStats.map((p, index) => `
+                <li class="point-item">
+                    <div class="point-left">
+                        <input type="checkbox" class="point-cb" value="${p.name}" id="cb-${index}">
+                        <div>
+                            <label for="cb-${index}" class="point-name">${p.name}</label>
+                            <div style="font-size:12px; color:#64748b; margin-top:2px;">
+                                掌握度: <span style="color:#ef4444; font-weight:bold;">${p.score}%</span> | 误选重灾区: <span style="color:#f59e0b; font-weight:bold;">${p.trap} (占错因 ${p.trapRate}%)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn-view" onclick="findAndShowQuestion('${p.name}')">👁️ 错因溯源</button>
+                </li>
+            `).join('');
+        }
+
+        function getQuestionBlockFromMarkdown(pointName) {
+            let blocks = window.rawMarkdown.split(/(?=\n\s*(?:\*\*)?\d+\.\s*\[)/);
+            if (blocks.length <= 2) blocks = window.rawMarkdown.split(/\n\s*\n/);
+            
+            let qBlock = blocks.find(b => b.includes(`data-point="${pointName}"`));
+            if (qBlock) return qBlock;
+
+            let qNum = pointName.replace(/[^0-9]/ig, ""); 
+            if (qNum) {
+                qBlock = blocks.find(b => {
+                    let cleanB = b.trim().replace(/^\*\*/, ''); 
+                    return cleanB.startsWith(qNum + ". ") || cleanB.startsWith(qNum + ".");
+                });
+                if (qBlock) return qBlock;
+            }
+            return null; 
+        }
+
+        function renderTopStudentsAnalysis(topStudents, totalClassSize) {
+            const metaObj = document.getElementById('top-student-meta');
+            const listObj = document.getElementById('top-students-list');
+            metaObj.innerHTML = `实时有效试卷共 <b>${totalClassSize}</b> 份。锁定总分前 27%（共 <b>${topStudents.length}</b> 名）高分组错题集：`;
+
+            if (topStudents.length === 0) return listObj.innerHTML = '<li>暂无数据</li>';
+
+            let html = '';
+            topStudents.forEach((student, index) => {
+                // 点击整个 header 区域都可以切换 class 'collapsed'
+                html += `
+                <li class="top-student-item">
+                    <div class="ts-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <div style="display:flex; align-items:center;">
+                            <span class="toggle-icon">▼</span>
+                            <span class="ts-name">👑 Top ${index + 1}: ${student._cleanName}</span>
+                        </div>
+                        <span class="ts-score">总分: ${student._cleanScore}分</span>
+                    </div>
+                    <div class="ts-details">`;
+
+                if(student._cleanErrors.length === 0) {
+                    html += `<div style="color:#10b981; font-weight:bold;">🏆 该生本卷暂无错题，继续保持！</div>`;
+                }
+
+                student._cleanErrors.forEach(err => {
+                    let qBlock = getQuestionBlockFromMarkdown(err.point);
+                    let qText = "试卷原文匹配失败...";
+                    let aiReason = "未提取到系统解析。";
+
+                    if (qBlock) {
+                        let pureQuestion = qBlock.split('<details>')[0].trim();
+                        qText = marked.parse(pureQuestion);
+                        let reasonMatch = qBlock.match(/<b>解析：<\/b>([\s\S]*?)<\/blockquote>/);
+                        if (reasonMatch && reasonMatch[1]) aiReason = "<strong>💡 考点原理解析：</strong>" + reasonMatch[1].replace(/<span.*?<\/span>/g, '').trim();
+                    }
+
+                    html += `
+                    <div class="mistake-item">
+                        <div class="mistake-point">
+                            <span>📌 考点：${err.point}</span>
+                            <span style="color:#ef4444;">误选：${err.wrong}</span>
+                        </div>
+                        <div class="mistake-q">${qText}</div>
+                        <div class="ts-reason">${aiReason}</div>
+                    </div>`;
+                });
+                html += `</div></li>`;
+            });
+            listObj.innerHTML = html;
+        }
+
+        function findAndShowQuestion(pointName) {
+            let qBlock = getQuestionBlockFromMarkdown(pointName);
+            if(qBlock) {
+                document.getElementById('modal-content').innerHTML = marked.parse(qBlock.trim());
+                document.getElementById('modal-overlay').style.display = 'flex';
+                document.querySelectorAll('#modal-content details').forEach(d => d.setAttribute('open', 'true'));
+            } else alert('未在试卷原文中定位到该题！可能是旧版排版未遵循规范。');
+        }
+
+        function toggleAll(source) { document.querySelectorAll('.point-cb').forEach(cb => cb.checked = source.checked); }
+
+        function generateBatchPrompt() {
+            const checkboxes = document.querySelectorAll('.point-cb:checked');
+            if(checkboxes.length === 0) return alert("请至少勾选一个薄弱考点！");
+            const selectedPoints = Array.from(checkboxes).map(cb => `【${cb.value}】`).join('、');
+            document.getElementById('ai-prompt-box').value = `你是一位资深的四川地区《建筑材料》专业教师。我班上的学生在最近的考试中，在以下考点上错误率极高，暴露出严重的知识盲区：\n${selectedPoints}\n\n请针对这些具体的薄弱点，为我出 5 道补偿练习题（3道单选，2道判断）。\n要求：\n1. 题目必须继续结合四川本地的工程场景。\n2. 重点考察学生对上述核心概念的辨析，设置常见的易错陷阱。\n3. 必须严格遵循我之前规定的【强制 Markdown 代码块包裹】和【绝对单行 <details> 解析】防错规范，并在答案后携带隐藏的考点标签。\n4. 请直接输出试卷代码块，不要说多余的废话。`;
+        }
+
+        function copyPrompt() {
+            const box = document.getElementById('ai-prompt-box');
+            if(!box.value) return alert("请先生成提示词！");
+            box.select(); document.execCommand('copy'); alert("✅ 复制成功！");
+        }
+
+        window.onload = initAnalysis;
+    </script>
+</body>
+</html>

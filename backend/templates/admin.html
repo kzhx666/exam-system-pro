@@ -177,5 +177,50 @@
             }
         }
     </script>
+
+<script>
+// 全局监听粘贴事件
+document.addEventListener('paste', async function(e) {
+    // 只有在输入框(Textarea)里粘贴才触发
+    if (e.target.tagName !== 'TEXTAREA') return;
+
+    let items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+        // 如果剪贴板里包含图片
+        if (items[i].type.indexOf('image') !== -1) {
+            e.preventDefault(); // 阻止默认粘贴文本的行为
+            let file = items[i].getAsFile();
+            let formData = new FormData();
+            formData.append('file', file, file.name || 'image.png');
+
+            // 记住当前光标位置
+            let start = e.target.selectionStart;
+            let end = e.target.selectionEnd;
+            let text = e.target.value;
+            let placeholder = "![图片上传中...]()";
+            
+            // 先在光标处插入占位符
+            e.target.value = text.substring(0, start) + placeholder + text.substring(end);
+            e.target.selectionStart = e.target.selectionEnd = start + placeholder.length;
+
+            try {
+                // 发送到服务器
+                let res = await fetch('/api/upload', { method: 'POST', body: formData });
+                let data = await res.json();
+                
+                // 替换为真正的 Markdown 图片语法
+                e.target.value = e.target.value.replace(placeholder, `![建材配图](${data.url})`);
+                
+                // 触发 Vue 的双向绑定更新
+                e.target.dispatchEvent(new Event('input', { bubbles: true }));
+            } catch (err) {
+                alert('⚠️ 图片上传失败，请检查网络');
+                e.target.value = e.target.value.replace(placeholder, "");
+            }
+        }
+    }
+});
+</script>
+
 </body>
 </html>

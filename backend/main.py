@@ -1,4 +1,7 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File
+from fastapi.staticfiles import StaticFiles
+import uuid, shutil, os
+from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, String, Integer, Text, DateTime
@@ -87,6 +90,20 @@ def parse_exam(md_text, manual_title=None):
         
         questions.append({"id": f"q_{len(questions)+1}", "type": q_type, "raw_num": raw_num, "content": html_content, "config": {"options": opts, "answer": std_ans, "analysis": ana_html}})
     return {"title": title, "questions": questions}
+
+# 创建本地图片保存目录
+os.makedirs("uploads", exist_ok=True)
+# 挂载静态目录，让前端可以通过 /api/uploads/xxx.png 访问图片
+app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+@app.post("/api/upload")
+async def upload_image(file: UploadFile = File(...)):
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'png'
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    file_path = os.path.join("uploads", filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"url": f"/api/uploads/{filename}"}
 
 @app.post("/api/exams")
 async def create(req: dict):

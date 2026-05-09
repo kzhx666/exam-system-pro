@@ -4,6 +4,9 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, String, Integer, Text, DateTime, text
 from sqlalchemy.orm import declarative_base, sessionmaker
+from docx import Document
+from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 import uuid, shutil, os, re, json, datetime
 import tarfile, base64, urllib.request, urllib.parse
 import sqlite3
@@ -31,6 +34,12 @@ class Exam(Base):
     folder_id = Column(String, default="default")
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.now)
+
+class Roster(Base):
+    __tablename__ = "rosters"
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    students_json = Column(Text)
 
 class Submission(Base):
     __tablename__ = "submissions"
@@ -103,6 +112,89 @@ def parse_exam(md_text, manual_title=None):
         if ana_m: ana_html = process_markdown_text(ana_m.group(1).strip())
         questions.append({"id": f"q_{len(questions)+1}", "type": q_type, "raw_num": raw_num, "content": html_content, "config": {"options": opts, "answer": std_ans, "analysis": ana_html}})
     return {"title": title, "questions": questions}
+
+def create_word_document(exam_title, questions, version="student"):
+    """生成 Word 文档
+    version: "student" 或 "teacher"
+    """
+    doc = Document()
+    
+    # 设置默认字体
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = '宋体'
+    font.size = Pt(12)  # 减小字体大小
+    
+    # 设置段落行距更紧凑
+    style.paragraph_format.line_spacing = 1.2
+    style.paragraph_format.space_after = Pt(6)  # 减小段后间距
+    
+    # 标题
+    title = doc.add_heading(exam_title, 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title.style.font.size = Pt(16)
+    title.style.font.bold = True
+    
+    # 题目
+    for q in questions:
+        # 题号和内容
+        p = doc.add_paragraph()
+        p.add_run(f"{q['raw_num']} ").bold = True
+        p.add_run(q['content'])
+        p.paragraph_format.left_indent = Pt(10)  # 减小左缩进
+        p.paragraph_format.space_after = Pt(4)    # 减小题目内容后间距
+        
+        # 选项
+        if q['type'] in ['single', 'multiple'] and q['config']['options']:
+            options = q['config']['options']
+            # 检查是否所有选项都很短（字符数小于等于6），适合排成一行
+            all_short = all(len(str(value)) <= 6 for value in options.values())
+            
+            if all_short and len(options) <= 4:
+                # 排成一行：A. 选项1   B. 选项2   C. 选项3   D. 选项4
+                p_opt = doc.add_paragraph()
+                for key, value in options.items():
+                    p_opt.add_run(f"{key}. ").bold = True
+                    p_opt.add_run(f"{value}    ")  # 用多个空格分隔
+                p_opt.paragraph_format.left_indent = Pt(12)
+                p_opt.paragraph_format.space_after = Pt(4)
+            else:
+                # 正常每行一个选项，但间距更紧凑
+                for key, value in options.items():
+                    p_opt = doc.add_paragraph()
+                    p_opt.add_run(f"{key}. ").bold = True
+                    p_opt.add_run(value)
+                    p_opt.paragraph_format.left_indent = Pt(12)
+                    p_opt.paragraph_format.space_after = Pt(2)  # 减小选项间距
+                    p_opt.paragraph_format.line_spacing = 1.1
+        
+        # 判断题选项
+        if q['type'] == 'judge':
+            p_opt = doc.add_paragraph()
+            p_opt.add_run("A. 正确    B. 错误")
+            p_opt.paragraph_format.left_indent = Pt(12)
+            p_opt.paragraph_format.space_after = Pt(4)
+        
+        # 教师版：添加答案和解析
+        if version == "teacher":
+            if q['config'].get('answer'):
+                p_ans = doc.add_paragraph()
+                p_ans.add_run("【答案】").font.color.rgb = RGBColor(255, 0, 0)  # 红色
+                p_ans.add_run(q['config']['answer']).font.color.rgb = RGBColor(255, 0, 0)
+                p_ans.paragraph_format.left_indent = Pt(12)
+                p_ans.paragraph_format.space_after = Pt(4)
+            
+            if q['config'].get('analysis') and q['config']['analysis'] != "无":
+                p_ana = doc.add_paragraph()
+                p_ana.add_run("【解析】").font.color.rgb = RGBColor(255, 0, 0)
+                p_ana.add_run(q['config']['analysis']).font.color.rgb = RGBColor(255, 0, 0)
+                p_ana.paragraph_format.left_indent = Pt(12)
+                p_ana.paragraph_format.space_after = Pt(6)
+        
+        # 减小题目间距
+        doc.add_paragraph("").paragraph_format.space_after = Pt(8)
+    
+    return doc
 
 os.makedirs("uploads", exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -241,7 +333,86 @@ async def get_a(eid: str):
     db = SessionLocal(); e = db.query(Exam).filter(Exam.id==eid).first(); db.close()
     return json.loads(e.parsed_json)
 
-@app.post("/api/backup")
+# 花名册管理
+@app.get("/api/rosters")
+async def list_rosters():
+    db = SessionLocal()
+    rosters = db.query(Roster).all()
+    db.close()
+    return [{"id": r.id, "name": r.name} for r in rosters]
+
+@app.post("/api/rosters")
+async def create_roster(req: dict):
+    db = SessionLocal()
+    rid = "r_" + uuid.uuid4().hex[:8]
+    students = req.get("students", [])
+    if isinstance(students, str): students = [name.strip() for name in students.split('\n') if name.strip()]
+    db.add(Roster(id=rid, name=req["name"], students_json=json.dumps(students, ensure_ascii=False)))
+    db.commit(); db.close()
+    return {"roster_id": rid}
+
+@app.put("/api/rosters/{rid}")
+async def update_roster(rid: str, req: dict):
+    db = SessionLocal()
+    r = db.query(Roster).filter(Roster.id == rid).first()
+    if not r: raise HTTPException(404)
+    r.name = req["name"]
+    students = req.get("students", [])
+    if isinstance(students, str): students = [name.strip() for name in students.split('\n') if name.strip()]
+    r.students_json = json.dumps(students, ensure_ascii=False)
+    db.commit(); db.close()
+    return {"status": "updated"}
+
+@app.delete("/api/rosters/{rid}")
+async def delete_roster(rid: str):
+    db = SessionLocal()
+    db.query(Roster).filter(Roster.id == rid).delete()
+    db.commit(); db.close()
+    return {"status": "ok"}
+
+@app.get("/api/rosters/{rid}")
+async def get_roster(rid: str):
+    db = SessionLocal()
+    r = db.query(Roster).filter(Roster.id == rid).first()
+    db.close()
+    if not r: raise HTTPException(404)
+    return {"id": r.id, "name": r.name, "students": json.loads(r.students_json or "[]")}
+
+@app.get("/api/roster/{rid}")
+async def s_roster(rid: str): return FileResponse("/app/templates/roster.html")
+
+@app.get("/api/download/{eid}")
+async def download_exam(eid: str, version: str = "student"):
+    """下载试卷 Word 文档
+    version: "student" 或 "teacher"
+    """
+    db = SessionLocal()
+    exam = db.query(Exam).filter(Exam.id == eid).first()
+    db.close()
+    
+    if not exam:
+        raise HTTPException(status_code=404, detail="试卷不存在")
+    
+    # 解析题目
+    data = json.loads(exam.parsed_json)
+    questions = data["questions"]
+    
+    # 生成 Word 文档
+    doc = create_word_document(exam.title, questions, version)
+    
+    # 保存到临时文件
+    temp_path = f"/tmp/{eid}_{version}.docx"
+    doc.save(temp_path)
+    
+    # 返回文件
+    filename = f"{exam.title}_{version}.docx"
+    return FileResponse(
+        path=temp_path,
+        filename=filename,
+        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+
+@app.get("/api/backup")
 async def backup():
     user = os.environ.get("NUTSTORE_USER"); pw = os.environ.get("NUTSTORE_PASS"); url = os.environ.get("WEBDAV_URL")
     if not all([user, pw, url]): raise HTTPException(status_code=500, detail="未配置坚果云环境变量")

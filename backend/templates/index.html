@@ -27,6 +27,37 @@
         .btn-submit-pro { background: var(--success); color: #fff; border: none; width: 100%; padding: 12px; border-radius: 8px; font-size: 16px; font-weight: 900; cursor: pointer; margin-top: 10px; }
         #result-overlay { position: fixed; inset: 0; background: #0f172a; display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 2000; color: #fff; }
     </style>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            function renderAllMath() {
+                if (window.renderMathInElement) {
+                    renderMathInElement(document.body, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\(', right: '\\)', display: false},
+                            {left: '\\[', right: '\\]', display: true}
+                        ],
+                        throwOnError: false
+                    });
+                }
+            }
+            
+            // 采用 MutationObserver 监听 DOM 变化
+            // 确保试卷数据异步加载到页面后，也能瞬间触发公式渲染
+            const observer = new MutationObserver((mutations) => {
+                observer.disconnect(); // 暂停监听，防止死循环
+                renderAllMath();
+                observer.observe(document.body, { childList: true, subtree: true }); // 恢复监听
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    </script>
+
 </head>
 <body>
     <nav class="app-top-nav"><span id="title-text">LOADING...</span><span>TERMINAL V3.1</span></nav>

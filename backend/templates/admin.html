@@ -20,6 +20,37 @@
     
     #backup-btn { display: none; position: fixed; top: 20px; right: 20px; background: #059669; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; }
 </style>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            function renderAllMath() {
+                if (window.renderMathInElement) {
+                    renderMathInElement(document.body, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\(', right: '\\)', display: false},
+                            {left: '\\[', right: '\\]', display: true}
+                        ],
+                        throwOnError: false
+                    });
+                }
+            }
+            
+            // 采用 MutationObserver 监听 DOM 变化
+            // 确保试卷数据异步加载到页面后，也能瞬间触发公式渲染
+            const observer = new MutationObserver((mutations) => {
+                observer.disconnect(); // 暂停监听，防止死循环
+                renderAllMath();
+                observer.observe(document.body, { childList: true, subtree: true }); // 恢复监听
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    </script>
+
 </head>
 <body>
     <button id="backup-btn" onclick="runBackup()">☁️ 一键备份至坚果云</button>

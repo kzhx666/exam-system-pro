@@ -412,7 +412,7 @@ async def download_exam(eid: str, version: str = "student"):
         media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     )
 
-@app.get("/api/backup")
+@app.post("/api/backup")
 async def backup():
     user = os.environ.get("NUTSTORE_USER"); pw = os.environ.get("NUTSTORE_PASS"); url = os.environ.get("WEBDAV_URL")
     if not all([user, pw, url]): raise HTTPException(status_code=500, detail="未配置坚果云环境变量")
